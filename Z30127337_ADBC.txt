@@ -1,0 +1,97 @@
+*&---------------------------------------------------------------------*
+*& Report Z30127337_ADBC
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& PROGRAM_ID: Z30127337_ADBC --------------------------*
+*& USER NAME:  TRAINEE07 --------------------------*
+*& CREATED ON: 09.01.2026 --------------------------*
+*& PACKAGE: Z30127337SPRINT --------------------------*
+*& TRANSPORT REQUEST NUMBER: LD6K906593--------------------------*
+*PURPOSE: THIS PROGRAM IS USE TO CONNECTING DATABASE FOR SPRINT CASE STUDY 50.*
+*&---------------------------------------------------------------------*
+REPORT z30127337_adbc.
+tables : z30127337aufk.
+
+"Local structures.
+TYPES : BEGIN OF ty_data,
+          aufnr TYPE z7337aufnr,
+          ernam TYPE ernam,
+          erdat TYPE auferfdat,
+          kunnr TYPE z7337kunnr,
+          name1 TYPE name1_gp,
+          ort01 TYPE ort01_gp,
+          bankn TYPE z7337bankn,
+          koinh TYPE koinh_fi,
+        END OF ty_data.
+        
+"Data Declarations.
+DATA : gt_data TYPE STANDARD TABLE OF ty_data,
+       gs_data TYPE ty_data.
+
+select-options : s_aufnr for z30127337aufk-aufnr,
+                 s_erdat for z30127337aufk-erdat.
+DATA: orf_1 TYPE REF TO cx_root.
+
+DATA: o_conn   TYPE REF TO cl_sql_connection,
+      o_sql    TYPE REF TO cl_sql_statement,
+      o_result TYPE REF TO cl_sql_result_set,
+      o_data   TYPE REF TO data,
+      v_sql    TYPE string,
+      v_count  TYPE i,
+      lv_mandt TYPE mandt.
+
+lv_mandt = sy-mandt.
+
+
+TRY.
+
+    CREATE OBJECT o_conn.
+    CREATE OBJECT o_sql EXPORTING con_ref = o_conn. "AND a.mandt = c.mandt
+
+
+    v_sql =
+
+|SELECT A.AUFNR,B.ERNAM,A.ERDAT,C.KUNNR,C.NAME1,C.ORT01,D.BANKN,D.KOINH | &&
+|FROM Z30127337AUFK AS A INNER JOIN Z30127337IHPA AS B | &&
+|ON A.OBJNR = B.OBJNR | &&
+|INNER JOIN Z30127337KNA1 AS C | &&
+|ON B.parnr = C.KUNNR INNER JOIN Z30127337KNBK AS D | &&
+|ON C.KUNNR = D.KUNNR | &&
+|where a.aufnr between '{ s_aufnr-low }' and '{ s_aufnr-high }' | &&
+|and a.erdat between '{ s_erdat-low }' and '{ s_erdat-high }' |.
+
+    CALL METHOD o_sql->execute_query
+      EXPORTING
+        statement  = v_sql
+*       hold_cursor = SPACE
+      RECEIVING
+        result_set = o_result.
+
+
+    GET REFERENCE OF gt_data INTO o_data.
+
+
+    CALL METHOD o_result->set_param_table
+      EXPORTING
+        itab_ref = o_data.
+
+    CALL METHOD o_result->next_package
+*  EXPORTING
+*    upto     = 0
+      RECEIVING
+        rows_ret = v_count.
+
+
+  CATCH cx_sql_exception INTO DATA(lx).
+    MESSAGE lx TYPE 'E'.
+    WRITE 'EXCEPTION OCCURED'.
+
+
+ENDTRY.
+
+WRITE: sy-mandt.
+
+"Class used to display out
+cl_demo_output=>display_data( gt_data ).

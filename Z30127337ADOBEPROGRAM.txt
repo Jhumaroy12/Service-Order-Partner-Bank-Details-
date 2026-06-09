@@ -1,0 +1,152 @@
+&---------------------------------------------------------------------*
+*& Report Z30127337ADOBEPROGRAM
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& PROGRAM_ID: Z30127337ADOBEPROGRAM --------------------------*
+*& USER NAME:  TRAINEE07 --------------------------*
+*& CREATED ON: 06.01.2026 --------------------------*
+*& PACKAGE: Z30127337_SPRINT--------------------------*
+*& TRANSPORT REQUEST NUMBER: LD6K906593--------------------------*
+*PURPOSE: THIS PROGRAM IS A DRIVER REPORT TO DISPLAY SERVICE ORDER FOR SPRINT  IN ADOBE FORM CASE STUDY 50.*
+*&---------------------------------------------------------------------*
+
+REPORT Z30127337ADOBEPROGRAM.
+TABLES : z30127337aufk.
+
+"=== Selection for multiple orders ===
+SELECT-OPTIONS : s_aufnr FOR z30127337aufk-aufnr.
+
+"=== Interface structures ===
+DATA : gs_header     TYPE z7337_s1,
+       gt_item       TYPE z7337_s2_tt,
+       gs_item       TYPE z7337_s2.
+
+" Customer number
+DATA : gv_kunnr TYPE z7337kunnr.
+
+" Adobe runtime
+DATA : lv_fm_name     TYPE funcname,
+       gs_docparams   TYPE sfpdocparams,
+       gs_outputparam TYPE sfpoutputparams.
+
+"=== Collect all headers for S_AUFNR ==="
+DATA : gt_header TYPE Z7337_S1_TT.
+
+START-OF-SELECTION.
+
+  "----------------------------------------------------------
+  " 1) Fetch ALL headers for S_AUFNR (PARVW = 'SP')
+  "----------------------------------------------------------
+  CLEAR gt_header.
+  SELECT a~aufnr
+         b~ernam
+         a~erdat
+    INTO CORRESPONDING FIELDS OF TABLE gt_header
+    FROM z30127337aufk AS a
+    INNER JOIN z30127337ihpa AS b
+      ON a~objnr = b~objnr
+   WHERE a~aufnr IN s_aufnr
+     AND b~parvw = 'SP'.
+
+  IF gt_header IS INITIAL.
+    MESSAGE e003(z7337_msg).
+    EXIT.
+  ENDIF.
+
+  "----------------------------------------------------------
+  " 2) Resolve generated Adobe FM name ONCE (from SFP interface)
+  "----------------------------------------------------------
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = 'Z30127337INTERFACE'   " SFP interface name
+    IMPORTING
+      e_funcname = lv_fm_name
+    EXCEPTIONS
+      OTHERS     = 1.
+
+  IF sy-subrc <> 0 OR lv_fm_name IS INITIAL.
+    MESSAGE e004(z7337_msg).
+    EXIT.
+  ENDIF.
+  "----------------------------------------------------------
+  " 3) LOOP: for each AUFNR → read customer → read items → print
+  "----------------------------------------------------------
+  LOOP AT gt_header INTO gs_header.
+
+    " 3a) Find customer for this order (IHPA: PARVW='SP')
+    CLEAR gv_kunnr.
+    SELECT b~parnr
+      INTO gv_kunnr
+      FROM z30127337ihpa AS b
+      INNER JOIN z30127337aufk AS a
+        ON a~objnr = b~objnr
+     WHERE a~aufnr = gs_header-aufnr
+       AND b~parvw = 'SP'.
+    ENDSELECT.
+
+    IF sy-subrc <> 0 OR gv_kunnr IS INITIAL.
+      MESSAGE |No customer found for AUFNR { gs_header-aufnr }| TYPE 'S' DISPLAY LIKE 'E'.
+      CONTINUE.
+    ENDIF.
+
+    " 3b) Build items from KNA1 + KNBK for this customer
+    CLEAR gt_item.
+    SELECT k1~kunnr
+           k1~name1
+           kb~bankn
+           kb~koinh
+           k1~ort01
+      INTO CORRESPONDING FIELDS OF TABLE gt_item
+      FROM z30127337kna1 AS k1
+      INNER JOIN z30127337knbk AS kb
+        ON k1~kunnr = kb~kunnr
+     WHERE k1~kunnr = gv_kunnr.
+
+    " Propagate AUFNR into items
+    LOOP AT gt_item INTO gs_item.
+      gs_item-aufnr = gs_header-aufnr.
+      MODIFY gt_item FROM gs_item TRANSPORTING aufnr.
+    ENDLOOP.
+
+    " 3c) Open ADS job → call generated FM → close
+    CALL FUNCTION 'FP_JOB_OPEN'
+      CHANGING
+        ie_outputparams = gs_outputparam
+      EXCEPTIONS
+        cancel          = 1
+        usage_error     = 2
+        system_error    = 3
+        internal_error  = 4
+        OTHERS          = 5.
+    IF sy-subrc <> 0.
+      MESSAGE |FP_JOB_OPEN failed for AUFNR { gs_header-aufnr }| TYPE 'E'.
+      CONTINUE.
+    ENDIF.
+
+    CALL FUNCTION lv_fm_name
+      EXPORTING
+        /1bcdwb/docparams = gs_docparams
+        wa_struc1         = gs_header
+        it_struc2         = gt_item
+      EXCEPTIONS
+        usage_error       = 1
+        system_error      = 2
+        internal_error    = 3
+        OTHERS            = 4.
+    IF sy-subrc <> 0.
+      MESSAGE |Adobe FM call failed for AUFNR { gs_header-aufnr }| TYPE 'E'.
+    ENDIF.
+
+    CALL FUNCTION 'FP_JOB_CLOSE'
+      EXCEPTIONS
+        usage_error     = 1
+        system_error    = 2
+        internal_error  = 3
+        OTHERS          = 4.
+    IF sy-subrc <> 0.
+      MESSAGE |FP_JOB_CLOSE failed for AUFNR { gs_header-aufnr }| TYPE 'E'.
+    ENDIF.
+
+  ENDLOOP.

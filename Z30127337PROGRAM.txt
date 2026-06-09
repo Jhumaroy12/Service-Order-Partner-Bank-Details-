@@ -1,0 +1,341 @@
+*&---------------------------------------------------------------------*
+**& Report Z30127337PROGRAM
+**&---------------------------------------------------------------------*
+**&
+**&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& PROGRAM_ID: Z30127337PROGRAM --------------------------*
+*& USER NAME:  TRAINEE07 --------------------------*
+*& CREATED ON: 29.12.2025 --------------------------*
+*& PACKAGE: Z30127337_SPRINT--------------------------*
+*& TRANSPORT REQUEST NUMBER: LD6K906593--------------------------*
+*PURPOSE: THIS PROGRAM IS A OOALV INTERACTIVE REPORT TO DISPLAY SERVICE ORDER FOR SPRINT CASE STUDY 50.*
+*&---------------------------------------------------------------------*
+REPORT Z30127337PROGRAM.
+
+"Table Declaration.
+TABLES : Z30127337AUFK.
+
+"Selection Screen.
+SELECT-OPTIONS : S_AUFNR FOR Z30127337AUFK-AUFNR,
+                 S_ERDAT FOR Z30127337AUFK-ERDAT.
+
+"Types of Screen 1 and Screen 2 Output.
+TYPES : BEGIN OF TY_OUT,
+          AUFNR TYPE Z30127337AUFK-AUFNR,
+          ERNAM TYPE Z30127337IHPA-ERNAM,
+          ERDAT TYPE Z30127337AUFK-ERDAT,
+          KUNNR TYPE Z30127337KNA1-KUNNR,
+          NAME1 TYPE Z30127337KNA1-NAME1,
+        END OF TY_OUT.
+
+TYPES : BEGIN OF TY_OUT1,
+          KUNNR TYPE Z30127337KNA1-KUNNR,
+          NAME1 TYPE Z30127337KNA1-NAME1,
+          ORT01 TYPE Z30127337KNA1-ORT01,
+          BANKN TYPE Z30127337KNBK-BANKN,
+          KOINH TYPE Z30127337KNBK-KOINH,
+        END OF TY_OUT1.
+
+"Data Declaration.
+DATA: IT_OUT       TYPE STANDARD TABLE OF TY_OUT,
+      WA_OUT       TYPE TY_OUT,
+      IT_FIELDCAT  TYPE LVC_T_FCAT,
+      WA_FIELDCAT  TYPE LVC_S_FCAT,
+      LS_LAYO      TYPE LVC_S_LAYO,
+      LO_OBJECT    TYPE REF TO CL_GUI_CUSTOM_CONTAINER,
+      LO_GRID      TYPE REF TO CL_GUI_ALV_GRID,
+      G_GRID_READY TYPE ABAP_BOOL VALUE ABAP_FALSE,
+      GV_KUNNR     TYPE Z30127337KNA1-KUNNR,
+      IT_OUT1      TYPE STANDARD TABLE OF TY_OUT1,
+      LO_OBJECT1   TYPE REF TO CL_GUI_CUSTOM_CONTAINER,
+      LO_GRID1     TYPE REF TO CL_GUI_ALV_GRID,
+      LS_LAYO1     TYPE LVC_S_LAYO.
+DATA LT_FCAT TYPE LVC_T_FCAT.
+DATA WA_FCAT TYPE LVC_S_FCAT.
+DATA: OK_CODE TYPE SYUCOMM.
+
+"Local Event Handler Class.
+CLASS LCL_EVENTS DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS ON_HOTSPOT_CLICK
+                  FOR EVENT HOTSPOT_CLICK OF CL_GUI_ALV_GRID
+      IMPORTING E_ROW_ID E_COLUMN_ID.
+ENDCLASS.
+
+CLASS LCL_EVENTS IMPLEMENTATION.
+  METHOD ON_HOTSPOT_CLICK.
+    READ TABLE IT_OUT INTO WA_OUT INDEX E_ROW_ID-INDEX.
+    IF SY-SUBRC = 0
+       AND E_COLUMN_ID-FIELDNAME = 'KUNNR'
+       AND WA_OUT-KUNNR IS NOT INITIAL.
+      GV_KUNNR = WA_OUT-KUNNR.
+      CALL SCREEN 0200.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+"Start-of-Selection.
+START-OF-SELECTION.
+  PERFORM GET_DATA.
+  CALL SCREEN 0100.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE STATUS_0100 OUTPUT.
+  SET PF-STATUS 'ABC'.
+  SET TITLEBAR 'ALV'.
+  IF G_GRID_READY = ABAP_FALSE.
+    PERFORM BUILD_ALV_0100.
+    G_GRID_READY = ABAP_TRUE.
+  ENDIF.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+  OK_CODE = SY-UCOMM.
+  CASE OK_CODE.
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+    WHEN 'GENERATE'.
+      PERFORM GENERATE_ADOBE_FORM.
+  ENDCASE.
+
+ENDMODULE.
+
+ FORM GENERATE_ADOBE_FORM.
+    SUBMIT Z30127337ADOBEPROGRAM WITH
+    s_AUFNR in s_AUFNR AND RETURN.
+    ENDFORM.
+INCLUDE Z30127337PROGRAM_STATUS_020O01.
+
+INCLUDE Z30127337PROGRAM_USER_COMMAI01.
+
+FORM GET_DATA.
+
+  SELECT
+    A~AUFNR
+    B~ERNAM
+    A~ERDAT
+    C~KUNNR
+    C~NAME1
+    INTO TABLE IT_OUT
+    FROM Z30127337AUFK AS A
+    INNER JOIN Z30127337IHPA AS B
+      ON A~OBJNR = B~OBJNR
+    INNER JOIN Z30127337KNA1 AS C
+      ON B~PARNR = C~KUNNR
+    WHERE A~AUFNR IN S_AUFNR
+      AND A~ERDAT IN S_ERDAT
+      AND B~PARVW = 'SP'.
+
+"At Selection-Screen.
+  IF SY-SUBRC <> 0 OR IT_OUT IS INITIAL.
+    MESSAGE e000(z7337_msg).
+  ENDIF.
+ENDFORM.
+
+"Subroutine.
+FORM BUILD_ALV_0100.
+  CREATE OBJECT LO_OBJECT
+    EXPORTING
+      CONTAINER_NAME = 'CONT'.
+
+  CREATE OBJECT LO_GRID
+    EXPORTING
+      I_PARENT = LO_OBJECT.
+
+  PERFORM CREATE_FCAT_OUT.
+
+  LS_LAYO-ZEBRA = 'X'.
+
+  SET HANDLER LCL_EVENTS=>ON_HOTSPOT_CLICK FOR LO_GRID.
+
+  " First display
+  "Method Declaration.
+  CALL METHOD LO_GRID->SET_TABLE_FOR_FIRST_DISPLAY
+    EXPORTING
+      IS_LAYOUT                     = LS_LAYO
+    CHANGING
+      IT_OUTTAB                     = IT_OUT
+      IT_FIELDCATALOG               = IT_FIELDCAT
+*     IT_SORT                       =
+*     IT_FILTER                     =
+    EXCEPTIONS
+      INVALID_PARAMETER_COMBINATION = 1
+      PROGRAM_ERROR                 = 2
+      TOO_MANY_LINES                = 3
+      OTHERS                        = 4.
+  IF SY-SUBRC <> 0.
+  MESSAGE e001(z7337_msg).
+  ENDIF.
+ENDFORM.
+
+"Manual Fieldcatalog.
+FORM CREATE_FCAT_OUT.
+
+  REFRESH IT_FIELDCAT.
+
+  " 1) AUFNR
+  CLEAR WA_FIELDCAT.
+  WA_FIELDCAT-COL_POS    = 1.
+  WA_FIELDCAT-FIELDNAME  = 'AUFNR'.
+  WA_FIELDCAT-SCRTEXT_M  = 'Order'.
+  WA_FIELDCAT-COLTEXT    = 'Order Number'.
+  WA_FIELDCAT-OUTPUTLEN  = 12.
+  APPEND WA_FIELDCAT TO IT_FIELDCAT.
+
+  " 2) ERNAM
+   CLEAR WA_FIELDCAT.
+  WA_FIELDCAT-COL_POS    = 2.
+  WA_FIELDCAT-FIELDNAME  = 'ERNAM'.
+  WA_FIELDCAT-SCRTEXT_M  = 'Created by'.
+  WA_FIELDCAT-COLTEXT    = 'Created by'.
+  WA_FIELDCAT-OUTPUTLEN  = 12.
+  APPEND WA_FIELDCAT TO IT_FIELDCAT.
+
+
+  " 3) ERDAT
+CLEAR WA_FIELDCAT.
+  WA_FIELDCAT-COL_POS    = 3.
+  WA_FIELDCAT-FIELDNAME  = 'ERDAT'.
+  WA_FIELDCAT-SCRTEXT_M  = 'Created on'.
+  WA_FIELDCAT-COLTEXT    = 'Created on'.
+  WA_FIELDCAT-OUTPUTLEN  = 10.
+  APPEND WA_FIELDCAT TO IT_FIELDCAT.
+
+  " 4) KUNNR (HOTSPOT)
+  CLEAR WA_FIELDCAT.
+  WA_FIELDCAT-COL_POS    = 4.
+  WA_FIELDCAT-FIELDNAME  = 'KUNNR'.
+  WA_FIELDCAT-SCRTEXT_M  = 'Customer'.
+  WA_FIELDCAT-COLTEXT    = 'Customer'.
+  WA_FIELDCAT-OUTPUTLEN  = 10.
+  WA_FIELDCAT-HOTSPOT    = 'X'.     " enable hotspot
+  WA_FIELDCAT-EMPHASIZE  = 'C510'.  "  color
+  APPEND WA_FIELDCAT TO IT_FIELDCAT.
+
+  " 5) NAME1
+  CLEAR WA_FIELDCAT.
+  WA_FIELDCAT-COL_POS    = 5.
+  WA_FIELDCAT-FIELDNAME  = 'NAME1'.
+  WA_FIELDCAT-SCRTEXT_M  = 'Name'.
+  WA_FIELDCAT-COLTEXT    = 'Customer Name'.
+  WA_FIELDCAT-OUTPUTLEN  = 20.
+  APPEND WA_FIELDCAT TO IT_FIELDCAT.
+ENDFORM.
+
+
+"Screen 2 Output.
+FORM GET_DATA_SCREEN2.
+  REFRESH IT_OUT1.
+  SELECT
+    A~KUNNR
+    A~NAME1
+    A~ORT01
+    B~BANKN
+    B~KOINH
+    INTO TABLE IT_OUT1
+    FROM Z30127337KNA1 AS A
+    INNER JOIN Z30127337KNBK AS B
+      ON A~KUNNR = B~KUNNR
+    WHERE A~KUNNR = GV_KUNNR.
+
+  IF SY-SUBRC <> 0 OR IT_OUT1 IS INITIAL.
+    MESSAGE E002(Z7337_MSG).
+  ENDIF.
+ENDFORM.
+
+"-------------------- Display detail ALV (Screen 0200) --------------------
+FORM DISPLAY_SCREEN2.
+
+  IF LO_GRID1 IS INITIAL.
+    CREATE OBJECT LO_OBJECT1
+      EXPORTING
+        CONTAINER_NAME = 'CONT1'.
+
+    CREATE OBJECT LO_GRID1
+      EXPORTING
+        I_PARENT = LO_OBJECT1.
+
+    PERFORM CREATE_FCAT_OUT1.
+
+    LS_LAYO1-ZEBRA = 'X'.
+    CALL METHOD LO_GRID1->SET_TABLE_FOR_FIRST_DISPLAY
+      EXPORTING
+        IS_LAYOUT                     = LS_LAYO1
+      CHANGING
+        IT_OUTTAB                     = IT_OUT1
+        IT_FIELDCATALOG               = LT_FCAT
+*       IT_SORT                       =
+*       IT_FILTER                     =
+      EXCEPTIONS
+        INVALID_PARAMETER_COMBINATION = 1
+        PROGRAM_ERROR                 = 2
+        TOO_MANY_LINES                = 3
+        OTHERS                        = 4.
+  ELSE.
+    CALL METHOD LO_GRID1->REFRESH_TABLE_DISPLAY
+      EXPORTING
+        I_SOFT_REFRESH = 'X'.
+  ENDIF.
+ENDFORM.
+
+"-------------------- FCAT builder for IT_OUT1 --------------------
+
+"Manual Fieldcatalog for Screen 2.
+FORM CREATE_FCAT_OUT1.
+  REFRESH LT_FCAT.
+
+  " 1) KUNNR
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS    = 1.
+  WA_FCAT-FIELDNAME  = 'KUNNR'.
+  WA_FCAT-SCRTEXT_M  = 'Customer'.
+  WA_FCAT-COLTEXT    = 'Customer'.
+  WA_FCAT-OUTPUTLEN  = 10.
+  APPEND WA_FCAT TO LT_FCAT.
+
+  " 2) NAME1
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS    = 2.
+  WA_FCAT-FIELDNAME  = 'NAME1'.
+  WA_FCAT-SCRTEXT_M  = 'Name'.
+  WA_FCAT-COLTEXT    = 'Name'.
+  WA_FCAT-OUTPUTLEN  = 20.
+  APPEND WA_FCAT TO LT_FCAT.
+
+  " 3) ORT01
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS    = 3.
+  WA_FCAT-FIELDNAME  = 'ORT01'.
+  WA_FCAT-SCRTEXT_M  = 'City'.
+  WA_FCAT-COLTEXT    = 'City'.
+  WA_FCAT-OUTPUTLEN  = 15.
+  APPEND WA_FCAT TO LT_FCAT.
+
+  " 4) BANKN (Bank No.)
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS    = 4.
+  WA_FCAT-FIELDNAME  = 'BANKN'.
+  WA_FCAT-SCRTEXT_M  = 'Bank Account.'
+  WA_FCAT-COLTEXT    = 'Bank Account Number.'.
+  WA_FCAT-OUTPUTLEN  = 20.
+  APPEND WA_FCAT TO LT_FCAT.
+
+  " 5) KOINH (Account Holder)
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS    = 5.
+  WA_FCAT-FIELDNAME  = 'KOINH'.
+  WA_FCAT-SCRTEXT_M  = 'Account Holder'.
+  WA_FCAT-COLTEXT    = 'Account Holder Name'.
+  WA_FCAT-OUTPUTLEN  = 20.
+  APPEND WA_FCAT TO LT_FCAT.
+ENDFORM.

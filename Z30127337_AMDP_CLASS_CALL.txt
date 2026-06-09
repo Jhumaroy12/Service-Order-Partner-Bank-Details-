@@ -1,0 +1,63 @@
+*&---------------------------------------------------------------------*
+*& Report Z30127337_AMDP_CLASS_CALL
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& PROGRAM_ID: Z30127337_AMDP_CLASS_CALL --------------------------*
+*& USER NAME:  TRAINEE07 --------------------------*
+*& CREATED ON: 13.01.2026 --------------------------*
+*& PACKAGE: Z30127337SPRINT --------------------------*
+*& TRANSPORT REQUEST NUMBER: LD6K906593--------------------------*
+*PURPOSE: THIS PROGRAM IS USE TO CALL AMDP CLASS FOR SPRINT CASE STUDY 50.*
+*&---------------------------------------------------------------------*
+
+REPORT Z30127337_AMDP_CLASS_CALL.
+
+"Types.
+TYPES : BEGIN OF ty_data,
+          mandt type mandt,
+          aufnr TYPE z7337aufnr,
+          ernam TYPE ernam,
+          erdat TYPE auferfdat,
+          kunnr TYPE z7337kunnr,
+          name1 TYPE name1_gp,
+          ort01 TYPE ort01_gp,
+          bankn TYPE z7337bankn,
+          koinh TYPE koinh_fi,
+        END OF ty_data.
+
+data : ls_aufnr type z30127337aufk.
+
+"Selection Screen.
+select-options : s_aufnr for ls_aufnr-aufnr,
+                 s_erdat for ls_aufnr-erdat.
+
+
+  data(lv_where) = cl_shdb_seltab=>combine_seltabs(
+  EXPORTING
+    it_named_seltabs = value #(
+                  ( name = 'AUFNR' dref = REF #( s_aufnr[] ) )
+                  ( name = 'ERDAT' dref = REF #( s_erdat[] ) )
+*    iv_client_field  =
+)
+    ).
+
+"AMDP class call.
+z7337_amdp_class=>get_data(
+  EXPORTING
+    iv_where = lv_where
+  IMPORTING
+    et_data  = data(ls_data)
+    ).
+
+"Display Data.
+CALL METHOD cl_demo_output=>display_data
+  EXPORTING
+    value  = ls_data
+*    name   =
+    .
+
+
+
+
